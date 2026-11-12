@@ -356,6 +356,7 @@ test('`element`', async function (t) {
       sanitize({
         type: 'element',
         tagName: 'img',
+        // @ts-expect-error: check how a `null` property value is handled.
         properties: {alt: null},
         children: []
       }),
@@ -434,18 +435,26 @@ test('`element`', async function (t) {
         search: 'example.com?foo:bar',
         hash: 'example.com#foo:bar',
         'protocol-less': 'www.example.com',
+        https: 'https://example.com',
+        'upper-case https': 'HTTPS://example.com',
+        'leading whitespace https': ' https://example.com',
+        'leading control char https': '\u0001https://example.com',
         mailto: 'mailto:foo@bar.com',
-        https: 'http://example.com',
-        http: 'http://example.com'
+        'upper-case mailto': 'MAILTO:foo@bar.com'
       },
       invalid: {
+        http: 'http://example.com',
+        irc: 'irc://example.com',
         javascript: 'javascript:alert(1)',
+        'upper-case javascript': 'JaVaScRiPt:alert(1)',
         whitespace: ' javascript:while(1){}',
+        'control char in scheme': 'java\tscript:alert(1)',
         'Unicode LS/PS I': '\u2028javascript:alert(1)',
         'Unicode Whitespace (#1)': ' javascript:alert(1)',
         'Unicode Whitespace (#2)': ' javascript:alert(1)',
         'infinity loop': 'javascript:while(1){}',
-        'data URL': 'data:,evilnastystuff'
+        'data URL': 'data:,evilnastystuff',
+        'data image URL': 'data:image/png;base64,aaaa'
       }
     })
   })
@@ -481,20 +490,101 @@ test('`element`', async function (t) {
         search: 'example.com?foo:bar',
         hash: 'example.com#foo:bar',
         'protocol-less': 'www.example.com',
-        https: 'http://example.com',
-        http: 'http://example.com'
+        https: 'https://example.com',
+        'upper-case https': 'HTTPS://example.com',
+        'leading whitespace https': ' https://example.com',
+        'leading control char https': '\u0001https://example.com',
+        'data image URL': 'data:image/png;base64,aaaa',
+        'data image svg': 'data:image/svg+xml;charset=utf-8,<svg/>',
+        'upper-case data image': 'DATA:IMAGE/GIF;base64,bbbb'
       },
       invalid: {
+        http: 'http://example.com',
         mailto: 'mailto:foo@bar.com',
         javascript: 'javascript:alert(1)',
+        'upper-case javascript': 'JaVaScRiPt:alert(1)',
         'Unicode LS/PS I': '\u2028javascript:alert(1)',
         'Unicode Whitespace (#1)': ' javascript:alert(1)',
         'Unicode Whitespace (#2)': ' javascript:alert(1)',
         'infinity loop': 'javascript:while(1){}',
-        'data URL': 'data:,evilnastystuff'
+        'data URL': 'data:,evilnastystuff',
+        'non-image data URL': 'data:text/html,evilnastystuff',
+        'misspelled image data URL': 'data:imagex/png,aaaa'
       }
     })
   })
+
+  await t.test('should support `srcSet`', async function () {
+    assert.deepEqual(
+      sanitize(
+        h('source', {
+          srcSet: 'https://example.com/1x.png 1x, https://example.com/2x.png 2x'
+        })
+      ),
+      h('source', {
+        srcSet: 'https://example.com/1x.png 1x, https://example.com/2x.png 2x'
+      })
+    )
+
+    assert.deepEqual(
+      sanitize(
+        h('source', {
+          srcSet: 'https://example.com/1x.png 1x, javascript:alert(1) 2x'
+        })
+      ),
+      h('source')
+    )
+
+    assert.deepEqual(
+      sanitize(
+        h('source', {
+          srcSet: ' HTTPS://example.com/1x.png 1x, /local.png 2x'
+        })
+      ),
+      h('source', {
+        srcSet: ' HTTPS://example.com/1x.png 1x, /local.png 2x'
+      })
+    )
+
+    assert.deepEqual(
+      sanitize(h('source', {srcSet: 'data:image/png;base64,aaaa 1x'})),
+      h('source')
+    )
+  })
+
+  await t.test(
+    'should not loosen a property based on another element',
+    async function () {
+      assert.deepEqual(
+        sanitize(h('img', {href: 'mailto:foo@bar.com'})),
+        h('img')
+      )
+
+      assert.deepEqual(sanitize(h('a', {src: 'https://example.com'})), h('a'))
+
+      assert.deepEqual(
+        sanitize(h('img', {src: 'https://example.com'}), {
+          ...defaultSchema,
+          protocols: {
+            ...defaultSchema.protocols,
+            src: ['http', 'https', 'javascript']
+          }
+        }),
+        h('img', {src: 'https://example.com'})
+      )
+
+      assert.deepEqual(
+        sanitize(h('img', {src: 'javascript:alert(1)'}), {
+          ...defaultSchema,
+          protocols: {
+            ...defaultSchema.protocols,
+            src: ['http', 'https', 'javascript']
+          }
+        }),
+        h('img')
+      )
+    }
+  )
 
   await t.test('should support `longDesc`', async function () {
     testAllUrls('img', 'longDesc', {

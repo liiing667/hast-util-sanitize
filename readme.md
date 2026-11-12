@@ -304,6 +304,20 @@ protocols: {
 }
 ```
 
+A few element and property combinations use stricter rules that always take
+precedence over this map, so a same-named property allowed on another element
+cannot loosen them:
+
+* `a[href]` only accepts `https:` and `mailto:` URLs (plus local URLs)
+* `img[src]` only accepts `https:` URLs and `data:image/…` URLs (plus local
+  URLs)
+* `source[srcSet]` only accepts `https:` URLs (plus local URLs); every
+  comma-separated candidate is checked individually
+
+Scheme comparisons ignore ASCII case and the leading control characters and
+whitespace that browsers strip while parsing URLs, so values such as
+` HTTPS://example.com` are treated the same as `https://example.com`.
+
 ###### `required`
 
 Map of tag names to required [*property names*][name] with a default value
